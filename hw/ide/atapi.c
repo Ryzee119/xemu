@@ -32,6 +32,10 @@
 #define ATAPI_SECTOR_BITS (2 + BDRV_SECTOR_BITS)
 #define ATAPI_SECTOR_SIZE (1 << ATAPI_SECTOR_BITS)
 
+#ifdef XBOX
+#include "hw/xbox/xdvd/xdvd_xbox.h"
+#endif
+
 static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret);
 
 static void padstr8(uint8_t *buf, int buf_size, const char *src)
@@ -485,6 +489,38 @@ static int ide_dvd_read_structure(IDEState *s, int format,
             {
                 int layer = packet[6];
                 uint64_t total_sectors;
+#ifdef XBOX
+                int block_number = ldl_be_p(buf + 2);
+  
+                // Info is on disk runout, on Xbox these locations are always set to these for this command it looks like
+                if (xdvd_is_redump(s->nb_sectors >> 2) && layer == 0xFE && block_number == 0xFF02FDFF)
+                {
+                    // There's a contant in the challenge structure. To prevent reading the decrypting all the time
+                    // we can check this constant exists in the structure, if so it must have already been done
+                    uint32_t xdvd_magic;
+                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_encrypted[4 + 12]);
+                    if (xdvd_magic != 0x2033AF) {
+                        xdvd_get_encrypted_challenge_table(s->xdvd_challenges_encrypted);
+                    }
+
+                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_decrypted[4 + 12]);
+                    if (xdvd_magic != 0x2033AF) {
+                        xdvd_get_decrypted_responses(s->xdvd_challenges_encrypted, s->xdvd_challenges_decrypted);
+                    }
+
+                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_encrypted[4 + 12]);
+                    if (xdvd_magic == 0x2033AF)
+                    {
+                        memcpy(buf, s->xdvd_challenges_encrypted, XDVD_STRUCTURE_LEN);
+                        return XDVD_STRUCTURE_LEN;
+                    }
+                }
+
+                // We deferred clearing this earlier so do it now
+                int max_len = lduw_be_p(buf + 8);
+                memset(buf, 0, max_len > IDE_DMA_BUF_SECTORS * BDRV_SECTOR_SIZE + 4 ?
+                    IDE_DMA_BUF_SECTORS * BDRV_SECTOR_SIZE + 4 : max_len);
+ #endif
 
                 if (layer != 0)
                     return -ASC_INV_FIELD_IN_CMD_PACKET;
@@ -855,6 +891,56 @@ static void cmd_get_configuration(IDEState *s, uint8_t *buf)
     ide_atapi_cmd_reply(s, len, max_len);
 }
 
+#ifdef XBOX
+static void cmd_mode_select_cb(void *opaque, int ret)
+{
+    IDEState *s = opaque;
+    uint8_t *buf = s->io_buffer;
+
+    if (ret < 0) {
+        block_acct_failed(blk_get_stats(s->blk), &s->acct);
+        ide_set_inactive(s, false);
+        return;
+    }
+
+    if (s->bus->dma->ops->rw_buf(s->bus->dma, 0))
+    {
+        s->status = READY_STAT | SEEK_STAT;
+        s->nsector = (s->nsector & ~7) | ATAPI_INT_REASON_IO | ATAPI_INT_REASON_CD;
+        ide_set_irq(s->bus);
+    }
+    block_acct_done(blk_get_stats(s->blk), &s->acct);
+    ide_set_inactive(s, false);
+
+    int max_len = lduw_be_p(buf) + 2;
+    if (max_len == DVD_SECURITY_PAGE_LEN && buf[8] == MODE_PAGE_XBOX_SECURITY)
+    {
+        memcpy(&s->xdvd_security, buf, DVD_SECURITY_PAGE_LEN);
+        printf("Authenticated: %d, Partition: %d\n", s->xdvd_security.page.Authenticated, s->xdvd_security.page.Partition);
+        s->xdvd_security.page.Authenticated = xdvd_is_redump(s->nb_sectors >> 2);
+        ide_atapi_cmd_ok(s);
+    }
+}
+
+static void cmd_mode_select(IDEState *s, uint8_t *buf)
+{
+    int parameter_list_len = parameter_list_len = lduw_be_p(buf + 7);
+
+    // Does MODE SELECT contain more data? Read it out
+    if (parameter_list_len > 0)
+    {
+        s->lba = -1;
+        s->packet_transfer_size = parameter_list_len;
+        s->io_buffer_size = parameter_list_len;
+        s->elementary_transfer_size = 0;
+
+        block_acct_start(blk_get_stats(s->blk), &s->acct, parameter_list_len, BLOCK_ACCT_WRITE);
+        s->status = READY_STAT | SEEK_STAT | DRQ_STAT;
+        ide_start_dma(s, cmd_mode_select_cb);
+    }
+}
+#endif
+
 static void cmd_mode_sense(IDEState *s, uint8_t *buf)
 {
     int action, code;
@@ -941,6 +1027,35 @@ static void cmd_mode_sense(IDEState *s, uint8_t *buf)
             buf[29] = 0;
             ide_atapi_cmd_reply(s, 30, max_len);
             break;
+#ifdef XBOX
+        case MODE_PAGE_XBOX_SECURITY:
+            if (xdvd_is_redump(s->nb_sectors >> 2) == false) {
+                goto error_cmd;
+            }
+
+            if (s->xdvd_security.page.PageCode != MODE_PAGE_XBOX_SECURITY) {
+                xdvd_get_default_security_page(&s->xdvd_security);
+            }
+
+            printf("Got MODE_SENSE: PAGE_XBOX_SECURITY. Responding with ss ");
+
+            s->xdvd_security.page.ResponseValue =
+                xdvd_get_challenge_response(s->xdvd_challenges_decrypted,
+                                            s->xdvd_security.page.ChallengeID);
+
+            printf("Challenge value %08x, ID %02x, Response %08x\n",
+                   s->xdvd_security.page.ChallengeValue,
+                   s->xdvd_security.page.ChallengeID,
+                   s->xdvd_security.page.ResponseValue);
+            printf("Authenticated: %d, Partition: %d\n",
+                   s->xdvd_security.page.Authenticated,
+                   s->xdvd_security.page.Partition);
+
+            memcpy(buf, &s->xdvd_security, sizeof(s->xdvd_security));
+
+            ide_atapi_cmd_reply(s, sizeof(XBOX_DVD_SECURITY), max_len);
+#endif
+        break;
         default:
             goto error_cmd;
         }
@@ -993,6 +1108,11 @@ static void cmd_read(IDEState *s, uint8_t* buf)
     }
 
     lba = ldl_be_p(buf + 2);
+
+#ifdef XBOX
+    total_sectors = xdvd_get_sector_cnt(&s->xdvd_security, total_sectors);
+    lba = xdvd_get_lba_offset(&s->xdvd_security, lba);
+#endif
     if (lba >= total_sectors || lba + nb_sectors - 1 >= total_sectors) {
         ide_atapi_cmd_error(s, ILLEGAL_REQUEST, ASC_LOGICAL_BLOCK_OOR);
         return;
@@ -1149,6 +1269,10 @@ static void cmd_read_cdvd_capacity(IDEState *s, uint8_t* buf)
 {
     uint64_t total_sectors = s->nb_sectors >> 2;
 
+#ifdef XBOX
+    total_sectors = xdvd_get_sector_cnt(&s->xdvd_security, total_sectors);
+#endif
+    
     /* NOTE: it is really the number of sectors minus 1 */
     stl_be_p(buf, total_sectors - 1);
     stl_be_p(buf + 4, 2048);
@@ -1206,8 +1330,11 @@ static void cmd_read_dvd_structure(IDEState *s, uint8_t* buf)
         }
     }
 
+#ifndef XBOX
+    // Still some important info we don't want to lose - dont clear it yet
     memset(buf, 0, max_len > IDE_DMA_BUF_SECTORS * BDRV_SECTOR_SIZE + 4 ?
            IDE_DMA_BUF_SECTORS * BDRV_SECTOR_SIZE + 4 : max_len);
+#endif
 
     switch (format) {
         case 0x00 ... 0x7f:
@@ -1291,6 +1418,9 @@ static const struct AtapiCmd {
     [ 0x46 ] = { cmd_get_configuration,             ALLOW_UA },
     [ 0x4a ] = { cmd_get_event_status_notification, ALLOW_UA },
     [ 0x51 ] = { cmd_read_disc_information,         CHECK_READY },
+#ifdef XBOX
+    [ 0x55 ] = { cmd_mode_select,/* (10) */         0 },
+#endif
     [ 0x5a ] = { cmd_mode_sense, /* (10) */         0 },
     [ 0xa8 ] = { cmd_read, /* (12) */               CHECK_READY },
     [ 0xad ] = { cmd_read_dvd_structure,            CHECK_READY },
