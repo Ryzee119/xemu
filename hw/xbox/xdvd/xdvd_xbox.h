@@ -74,9 +74,9 @@ void xdvd_get_default_security_page(XBOX_DVD_SECURITY *xdvd_security);
 
 uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors);
  
-uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, unsigned int lba);
+uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors, unsigned int lba);
 
-void xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted);
+bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted);
 
 void xdvd_get_decrypted_responses(const uint8_t *xdvd_challenge_table_encrypted, uint8_t *xdvd_challenge_table_decrypted);
 

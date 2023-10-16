@@ -10,8 +10,6 @@
 #include "WjCryptLib_Sha1.h"
 #include "xdvd_xbox.h"
 
-
-
 // Ref https://multimedia.cx/eggs/xbox-sphinx-protocol/
 #define CR_TABLE_NUM_ENTRIES 773
 #define CR_ENTRIES 774
@@ -30,6 +28,13 @@ void xdvd_get_decrypted_responses(const uint8_t *xdvd_challenge_table_encrypted,
     Sha1Context sha_ctx;
     SHA1_HASH sha_hash;
     Rc4Context rc4_ctx;
+
+    // Check if we have already decrypted previously
+    uint32_t xdvd_magic = ldl_be_p(&xdvd_challenge_table_decrypted[4 + 12]);
+    if (xdvd_magic == 0x2033AF)
+    {
+        return;
+    }
 
     // Prepare the data for decryption
     memcpy(xdvd_challenge_table_decrypted, xdvd_challenge_table_encrypted, XDVD_STRUCTURE_LEN);
@@ -73,10 +78,13 @@ uint32_t xdvd_get_challenge_response(const uint8_t *xdvd_challenge_table_decrypt
 // Once the DVD is authenticated, the xbox will activate the game partition (=1) which retuns the full sector count
 uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors)
 {
-    if (total_sectors != XDVD_REDUMP_SECTOR_CNT) {
+    if (xdvd_is_redump(total_sectors) == false)
+    {
         return total_sectors;
     }
 
+    // A 'redump' style iso returns XDVD_VIDEO_PARTITION_SECTOR_CNT initially before it is authenticated
+    // otherwise it returns the full sector count of the game data.
     if (xdvd_security->page.Authenticated == 0 ||
         xdvd_security->page.Partition == 0) {
         total_sectors = XDVD_VIDEO_PARTITION_SECTOR_CNT;
@@ -88,20 +96,31 @@ uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_se
 }
 
 // On the game partition, all reads to the ISO need to be offset to emulate it being on the game partition
-uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, unsigned int lba)
+uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors, unsigned int lba)
 {
-    if (xdvd_security->page.Authenticated == 1 &&
-        xdvd_security->page.Partition == 1) {
-        lba += XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE;
+    if (xdvd_is_redump(total_sectors))
+    {
+        if (xdvd_security->page.Authenticated == 1 &&
+            xdvd_security->page.Partition == 1) {
+            lba += XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE;
+        }
     }
     return lba;
 }
 
 // This is a 1636 byte structure read from an Xbox DVD that contains an encrypted table with all the challenges and reponse values
 // This is read from on an Xbox by issuing a 0xAD READ DVD STRUCTURE SCSI
-void xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
+bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
 {
-    //FIXME probably
+    // Check if we have already read it from the file
+    uint32_t xdvd_magic = ldl_be_p(&xdvd_challenge_table_encrypted[4 + 12]);
+    if (xdvd_magic == 0x2033AF)
+    {
+        return true;
+    }
+
+    // Otherwise read in from file
+    // FIXME probably
     const char *base = xemu_settings_get_base_path();
     assert(base != NULL);
     char *dvd_challenge_table_path = g_strdup_printf("%s%s", base, "dvd_layout.bin");
@@ -128,10 +147,16 @@ void xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
             fread(xdvd_challenge_table_encrypted, 1, file_size, file);
         }
         fclose(file);
+        return true;
+    }
+    else
+    {
+        memset(xdvd_challenge_table_encrypted, 0, XDVD_STRUCTURE_LEN);
+        return false;
     }
 }
 
-// The Xbox will request this page before is begins sending challenges, so we need to be able to reply with a default structure
+// The Xbox will request this page before it begins sending challenges, so we need to be able to reply with a default structure
 void xdvd_get_default_security_page(XBOX_DVD_SECURITY *xdvd_security)
 {
     // Only needs a few crucial initial values to start the challenge/response session
@@ -144,7 +169,6 @@ void xdvd_get_default_security_page(XBOX_DVD_SECURITY *xdvd_security)
         .page.BookTypeAndVersion = 0xD1,
         .page.Unk2 = 1,
     };
-
     memcpy(xdvd_security, &s, sizeof(XBOX_DVD_SECURITY));
 };
 

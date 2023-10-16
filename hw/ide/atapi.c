@@ -493,24 +493,11 @@ static int ide_dvd_read_structure(IDEState *s, int format,
                 int block_number = ldl_be_p(buf + 2);
   
                 // Info is on disk runout, on Xbox these locations are always set to these for this command it looks like
-                if (xdvd_is_redump(s->nb_sectors >> 2) && layer == 0xFE && block_number == 0xFF02FDFF)
+                if (layer == 0xFE && block_number == 0xFF02FDFF)
                 {
-                    // There's a contant in the challenge structure. To prevent reading the decrypting all the time
-                    // we can check this constant exists in the structure, if so it must have already been done
-                    uint32_t xdvd_magic;
-                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_encrypted[4 + 12]);
-                    if (xdvd_magic != 0x2033AF) {
-                        xdvd_get_encrypted_challenge_table(s->xdvd_challenges_encrypted);
-                    }
-
-                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_decrypted[4 + 12]);
-                    if (xdvd_magic != 0x2033AF) {
-                        xdvd_get_decrypted_responses(s->xdvd_challenges_encrypted, s->xdvd_challenges_decrypted);
-                    }
-
-                    xdvd_magic = ldl_be_p(&s->xdvd_challenges_encrypted[4 + 12]);
-                    if (xdvd_magic == 0x2033AF)
+                    if (xdvd_get_encrypted_challenge_table(s->xdvd_challenges_encrypted))
                     {
+                        xdvd_get_decrypted_responses(s->xdvd_challenges_encrypted, s->xdvd_challenges_decrypted);
                         memcpy(buf, s->xdvd_challenges_encrypted, XDVD_STRUCTURE_LEN);
                         return XDVD_STRUCTURE_LEN;
                     }
@@ -917,7 +904,7 @@ static void cmd_mode_select_cb(void *opaque, int ret)
     {
         memcpy(&s->xdvd_security, buf, DVD_SECURITY_PAGE_LEN);
         printf("Authenticated: %d, Partition: %d\n", s->xdvd_security.page.Authenticated, s->xdvd_security.page.Partition);
-        s->xdvd_security.page.Authenticated = xdvd_is_redump(s->nb_sectors >> 2);
+        s->xdvd_security.page.Authenticated = 1;
         ide_atapi_cmd_ok(s);
     }
 }
@@ -1029,10 +1016,6 @@ static void cmd_mode_sense(IDEState *s, uint8_t *buf)
             break;
 #ifdef XBOX
         case MODE_PAGE_XBOX_SECURITY:
-            if (xdvd_is_redump(s->nb_sectors >> 2) == false) {
-                goto error_cmd;
-            }
-
             if (s->xdvd_security.page.PageCode != MODE_PAGE_XBOX_SECURITY) {
                 xdvd_get_default_security_page(&s->xdvd_security);
             }
@@ -1110,8 +1093,8 @@ static void cmd_read(IDEState *s, uint8_t* buf)
     lba = ldl_be_p(buf + 2);
 
 #ifdef XBOX
+    lba = xdvd_get_lba_offset(&s->xdvd_security, total_sectors, lba);
     total_sectors = xdvd_get_sector_cnt(&s->xdvd_security, total_sectors);
-    lba = xdvd_get_lba_offset(&s->xdvd_security, lba);
 #endif
     if (lba >= total_sectors || lba + nb_sectors - 1 >= total_sectors) {
         ide_atapi_cmd_error(s, ILLEGAL_REQUEST, ASC_LOGICAL_BLOCK_OOR);
