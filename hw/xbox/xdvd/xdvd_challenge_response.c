@@ -21,7 +21,8 @@
 #define ATAPI_SECTOR_SIZE 2048
 #endif
 
-// Takes an encrypted dvd challenge table and decryptes the challenge/response table
+// Takes an encrypted dvd challenge table and decryptes the challenge/response
+// table
 void xdvd_get_decrypted_responses(const uint8_t *xdvd_challenge_table_encrypted,
                                   uint8_t *xdvd_challenge_table_decrypted)
 {
@@ -31,20 +32,21 @@ void xdvd_get_decrypted_responses(const uint8_t *xdvd_challenge_table_encrypted,
 
     // Check if we have already decrypted previously
     uint32_t xdvd_magic = ldl_be_p(&xdvd_challenge_table_decrypted[4 + 12]);
-    if (xdvd_magic == 0x2033AF)
-    {
+    if (xdvd_magic == 0x2033AF) {
         return;
     }
 
     // Prepare the data for decryption
-    memcpy(xdvd_challenge_table_decrypted, xdvd_challenge_table_encrypted, XDVD_STRUCTURE_LEN);
+    memcpy(xdvd_challenge_table_decrypted, xdvd_challenge_table_encrypted,
+           XDVD_STRUCTURE_LEN);
 
     // Process is basically from
     // https://multimedia.cx/eggs/xbox-sphinx-protocol/ The challenge/response
     // table is encrypted with RC4. The key is derived from the CR_KEY_BASIS
     // after a SHA1 hash is computed over it.
     Sha1Initialise(&sha_ctx);
-    Sha1Update(&sha_ctx, &xdvd_challenge_table_encrypted[CR_KEY_BASIS], CR_KEY_BASIS_LEN);
+    Sha1Update(&sha_ctx, &xdvd_challenge_table_encrypted[CR_KEY_BASIS],
+               CR_KEY_BASIS_LEN);
     Sha1Finalise(&sha_ctx, &sha_hash);
     // The first 7 bytes of the SHA1 hash are fed into the RC4 initialisation
     // function as the key
@@ -55,11 +57,14 @@ void xdvd_get_decrypted_responses(const uint8_t *xdvd_challenge_table_encrypted,
            &xdvd_challenge_table_decrypted[CR_ENTRIES], CR_ENTRIES_LEN);
 }
 
-// Given the already decrypted challenge table and the challenge ID sent by the Xbox, return the required response dword
-uint32_t xdvd_get_challenge_response(const uint8_t *xdvd_challenge_table_decrypted,
-                                     uint8_t challenge_id)
+// Given the already decrypted challenge table and the challenge ID sent by the
+// Xbox, return the required response dword
+uint32_t
+xdvd_get_challenge_response(const uint8_t *xdvd_challenge_table_decrypted,
+                            uint8_t challenge_id)
 {
-    int challengeEntryCount = xdvd_challenge_table_decrypted[CR_TABLE_NUM_ENTRIES];
+    int challengeEntryCount =
+        xdvd_challenge_table_decrypted[CR_TABLE_NUM_ENTRIES];
     PXBOX_DVD_CHALLENGE challenges =
         (PXBOX_DVD_CHALLENGE)(&xdvd_challenge_table_decrypted[CR_ENTRIES]);
 
@@ -74,17 +79,19 @@ uint32_t xdvd_get_challenge_response(const uint8_t *xdvd_challenge_table_decrypt
     return 0;
 }
 
-// When the Xbox DVD in not authenticated it is on the video partiton (=0) and returns a small sector count
-// Once the DVD is authenticated, the xbox will activate the game partition (=1) which retuns the full sector count
-uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors)
+// When the Xbox DVD in not authenticated it is on the video partiton (=0) and
+// returns a small sector count Once the DVD is authenticated, the xbox will
+// activate the game partition (=1) which retuns the full sector count
+uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security,
+                             uint64_t total_sectors)
 {
-    if (xdvd_is_redump(total_sectors) == false)
-    {
+    if (xdvd_is_redump(total_sectors) == false) {
         return total_sectors;
     }
 
-    // A 'redump' style iso returns XDVD_VIDEO_PARTITION_SECTOR_CNT initially before it is authenticated
-    // otherwise it returns the full sector count of the game data.
+    // A 'redump' style iso returns XDVD_VIDEO_PARTITION_SECTOR_CNT initially
+    // before it is authenticated otherwise it returns the full sector count of
+    // the game data.
     if (xdvd_security->page.Authenticated == 0 ||
         xdvd_security->page.Partition == 0) {
         total_sectors = XDVD_VIDEO_PARTITION_SECTOR_CNT;
@@ -95,11 +102,12 @@ uint64_t xdvd_get_sector_cnt(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_se
     return total_sectors;
 }
 
-// On the game partition, all reads to the ISO need to be offset to emulate it being on the game partition
-uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_sectors, unsigned int lba)
+// On the game partition, all reads to the ISO need to be offset to emulate it
+// being on the game partition
+uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security,
+                             uint64_t total_sectors, unsigned int lba)
 {
-    if (xdvd_is_redump(total_sectors))
-    {
+    if (xdvd_is_redump(total_sectors)) {
         if (xdvd_security->page.Authenticated == 1 &&
             xdvd_security->page.Partition == 1) {
             lba += XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE;
@@ -108,14 +116,14 @@ uint32_t xdvd_get_lba_offset(XBOX_DVD_SECURITY *xdvd_security, uint64_t total_se
     return lba;
 }
 
-// This is a 1636 byte structure read from an Xbox DVD that contains an encrypted table with all the challenges and reponse values
-// This is read from on an Xbox by issuing a 0xAD READ DVD STRUCTURE SCSI
+// This is a 1636 byte structure read from an Xbox DVD that contains an
+// encrypted table with all the challenges and reponse values This is read from
+// on an Xbox by issuing a 0xAD READ DVD STRUCTURE SCSI
 bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
 {
     // Check if we have already read it from the file
     uint32_t xdvd_magic = ldl_be_p(&xdvd_challenge_table_encrypted[4 + 12]);
-    if (xdvd_magic == 0x2033AF)
-    {
+    if (xdvd_magic == 0x2033AF) {
         return true;
     }
 
@@ -127,7 +135,8 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
     assert(base != NULL);
 
     // First attempt to read the dvd layout dumped from the xbox DVD drive
-    char *dvd_challenge_table_path = g_strdup_printf("%s%s", base, "dvd_layout.bin");
+    char *dvd_challenge_table_path =
+        g_strdup_printf("%s%s", base, "dvd_layout.bin");
     FILE *file = qemu_fopen(dvd_challenge_table_path, "r");
     free(dvd_challenge_table_path);
     long file_size;
@@ -146,31 +155,32 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
         fseek(file, 0, SEEK_SET);
 
         // Read the file in and return it to the xemu
-        // My Samsung included the first two bytes in the total size, My Philips did not so I check both cases
+        // My Samsung included the first two bytes in the total size, My Philips
+        // did not so I check both cases
         if (file_size == XDVD_STRUCTURE_LEN) {
             fread(xdvd_challenge_table_encrypted, 1, file_size, file);
         }
         fclose(file);
         return true;
     }
-    // If that fails, fall back to reading the redump style SS.bin from kreon etc
-    else
-    {
+    // If that fails, fall back to reading the redump style SS.bin from kreon
+    // etc
+    else {
         dvd_challenge_table_path = g_strdup_printf("%s%s", base, "SS.bin");
         FILE *file = qemu_fopen(dvd_challenge_table_path, "r");
         free(dvd_challenge_table_path);
-        
-        if (file)
-        {
+
+        if (file) {
             // Determine file size to ensure it's right
             fseek(file, 0, SEEK_END);
             file_size = ftell(file);
             fseek(file, 0, SEEK_SET);
-            if (file_size == 2048)
-            {
+            if (file_size == 2048) {
                 // First two bytes are length of structure
-                xdvd_challenge_table_encrypted[0] = (XDVD_STRUCTURE_LEN >> 8) & 0xFF;
-                xdvd_challenge_table_encrypted[1] = (XDVD_STRUCTURE_LEN >> 0) & 0xFF;
+                xdvd_challenge_table_encrypted[0] =
+                    (XDVD_STRUCTURE_LEN >> 8) & 0xFF;
+                xdvd_challenge_table_encrypted[1] =
+                    (XDVD_STRUCTURE_LEN >> 0) & 0xFF;
 
                 // Read header
                 fseek(file, 0, SEEK_SET);
@@ -178,7 +188,8 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
 
                 // Read challenge/response table onward to end of SS
                 fseek(file, CR_ENTRIES - 6, SEEK_SET);
-                fread(&xdvd_challenge_table_encrypted[CR_ENTRIES - 2], 1, XDVD_STRUCTURE_LEN - (CR_ENTRIES - 2), file);
+                fread(&xdvd_challenge_table_encrypted[CR_ENTRIES - 2], 1,
+                      XDVD_STRUCTURE_LEN - (CR_ENTRIES - 2), file);
             }
             fclose(file);
             return true;
@@ -188,10 +199,12 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
     return false;
 }
 
-// The Xbox will request this page before it begins sending challenges, so we need to be able to reply with a default structure
+// The Xbox will request this page before it begins sending challenges, so we
+// need to be able to reply with a default structure
 void xdvd_get_default_security_page(XBOX_DVD_SECURITY *xdvd_security)
 {
-    // Only needs a few crucial initial values to start the challenge/response session
+    // Only needs a few crucial initial values to start the challenge/response
+    // session
     static const XBOX_DVD_SECURITY s = {
         .header.ModeDataLength[0] = 0,
         .header.ModeDataLength[1] = sizeof(XBOX_DVD_SECURITY) - 2,
