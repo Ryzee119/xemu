@@ -119,10 +119,14 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
         return true;
     }
 
+    memset(xdvd_challenge_table_encrypted, 0, XDVD_STRUCTURE_LEN);
+
     // Otherwise read in from file
     // FIXME probably
     const char *base = xemu_settings_get_base_path();
     assert(base != NULL);
+
+    // First attempt to read the dvd layout dumped from the xbox DVD drive
     char *dvd_challenge_table_path = g_strdup_printf("%s%s", base, "dvd_layout.bin");
     FILE *file = qemu_fopen(dvd_challenge_table_path, "r");
     free(dvd_challenge_table_path);
@@ -149,11 +153,39 @@ bool xdvd_get_encrypted_challenge_table(uint8_t *xdvd_challenge_table_encrypted)
         fclose(file);
         return true;
     }
+    // If that fails, fall back to reading the redump style SS.bin from kreon etc
     else
     {
-        memset(xdvd_challenge_table_encrypted, 0, XDVD_STRUCTURE_LEN);
-        return false;
+        dvd_challenge_table_path = g_strdup_printf("%s%s", base, "SS.bin");
+        FILE *file = qemu_fopen(dvd_challenge_table_path, "r");
+        free(dvd_challenge_table_path);
+        
+        if (file)
+        {
+            // Determine file size to ensure it's right
+            fseek(file, 0, SEEK_END);
+            file_size = ftell(file);
+            fseek(file, 0, SEEK_SET);
+            if (file_size == 2048)
+            {
+                // First two bytes are length of structure
+                xdvd_challenge_table_encrypted[0] = (XDVD_STRUCTURE_LEN >> 8) & 0xFF;
+                xdvd_challenge_table_encrypted[1] = (XDVD_STRUCTURE_LEN >> 0) & 0xFF;
+
+                // Read header
+                fseek(file, 0, SEEK_SET);
+                fread(&xdvd_challenge_table_encrypted[4], 1, 0x10, file);
+
+                // Read challenge/response table onward to end of SS
+                fseek(file, CR_ENTRIES - 6, SEEK_SET);
+                fread(&xdvd_challenge_table_encrypted[CR_ENTRIES - 2], 1, XDVD_STRUCTURE_LEN - (CR_ENTRIES - 2), file);
+            }
+            fclose(file);
+            return true;
+        }
     }
+
+    return false;
 }
 
 // The Xbox will request this page before it begins sending challenges, so we need to be able to reply with a default structure
