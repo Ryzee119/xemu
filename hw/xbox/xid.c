@@ -107,6 +107,7 @@ typedef struct USBXIDState {
     XIDGamepadOutputReport out_state;
     XIDGamepadOutputReport out_state_capabilities;
     uint8_t                device_index;
+    uint8_t                in_state_dirty;
 } USBXIDState;
 
 static const USBDescIface desc_iface_xbox_gamepad = {
@@ -236,6 +237,9 @@ static void update_input(USBXIDState *s)
         { GAMEPAD_DPAD_RIGHT,  CONTROLLER_BUTTON_DPAD_RIGHT },
     };
 
+    XIDGamepadReport old_state;
+    memcpy(&old_state, &s->in_state, sizeof(old_state));
+
     for (int i = 0; i < 6; i++) {
         int pressed = state->buttons & button_map_analog[i][1];
         s->in_state.bAnalogButtons[button_map_analog[i][0]] = pressed ? 0xff : 0;
@@ -254,6 +258,10 @@ static void update_input(USBXIDState *s)
     s->in_state.sThumbLY = state->axis[CONTROLLER_AXIS_LSTICK_Y];
     s->in_state.sThumbRX = state->axis[CONTROLLER_AXIS_RSTICK_X];
     s->in_state.sThumbRY = state->axis[CONTROLLER_AXIS_RSTICK_Y];
+
+    if (memcmp(&old_state, &s->in_state, sizeof(old_state))) {
+        s->in_state_dirty = 1;
+    }
 }
 
 static void usb_xid_handle_reset(USBDevice *dev)
@@ -378,7 +386,12 @@ static void usb_xid_handle_data(USBDevice *dev, USBPacket *p)
     case USB_TOKEN_IN:
         if (p->ep->nr == 2) {
             update_input(s);
-            usb_packet_copy(p, &s->in_state, s->in_state.bLength);
+            if (s->in_state_dirty) {
+                usb_packet_copy(p, &s->in_state, s->in_state.bLength);
+                s->in_state_dirty = 0;
+            } else {
+                p->status = USB_RET_NAK;
+            }
         } else {
             assert(false);
         }
