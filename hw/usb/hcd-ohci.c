@@ -249,6 +249,7 @@ static inline void ohci_intr_update(OHCIState *ohci)
         (ohci->intr_status & ohci->intr))
         level = 1;
 
+    qemu_set_irq(ohci->irq, 0);
     qemu_set_irq(ohci->irq, level);
 }
 
@@ -346,6 +347,7 @@ static void ohci_soft_reset(OHCIState *ohci)
     ohci->frame_number = 0;
     ohci->pstart = 0;
     ohci->lst = OHCI_LS_THRESH;
+    printf("OHCI RESET\n");
 }
 
 void ohci_hard_reset(OHCIState *ohci)
@@ -573,12 +575,14 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
 
     if (addr == 0) {
         ohci_die(ohci);
+        printf("%d\n", __LINE__);
         return 1;
     }
 
     if (ohci_read_iso_td(ohci, addr, &iso_td)) {
         trace_usb_ohci_iso_td_read_failed(addr);
         ohci_die(ohci);
+        printf("%d\n", __LINE__);
         return 1;
     }
 
@@ -599,6 +603,7 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
 
     if (relative_frame_number < 0) {
         trace_usb_ohci_iso_td_relative_frame_number_neg(relative_frame_number);
+        printf("%d\n", __LINE__);
         return 1;
     } else if (relative_frame_number > frame_count) {
         /* ISO TD expired - retire the TD to the Done Queue and continue with
@@ -607,8 +612,13 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
                                                         frame_count);
         if (OHCI_CC_DATAOVERRUN == OHCI_BM(iso_td.flags, TD_CC)) {
             /* avoid infinite loop */
+            printf("%d\n", __LINE__);
             return 1;
         }
+        dir = OHCI_BM(ed->flags, ED_D);
+        printf("OHCI_CC_DATAOVERRUN %d current_frame: %d starting_frame: %d. frame_count: %d, dir %d\n",
+        relative_frame_number, ohci->frame_number, starting_frame, frame_count, dir);
+        assert(0);
         OHCI_SET_BM(iso_td.flags, TD_CC, OHCI_CC_DATAOVERRUN);
         ed->head &= ~OHCI_DPTR_MASK;
         ed->head |= (iso_td.next & OHCI_DPTR_MASK);
@@ -640,11 +650,14 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
         break;
     default:
         trace_usb_ohci_iso_td_bad_direction(dir);
+        printf("%d\n", __LINE__);
         return 1;
     }
 
     if (!iso_td.bp || !iso_td.be) {
         trace_usb_ohci_iso_td_bad_bp_be(iso_td.bp, iso_td.be);
+        printf("%d\n", __LINE__);
+        assert(0);
         return 1;
     }
 
@@ -659,11 +672,13 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
         ((relative_frame_number < frame_count) && 
          !(OHCI_BM(next_offset, TD_PSW_CC) & 0xe))) {
         trace_usb_ohci_iso_td_bad_cc_not_accessed(start_offset, next_offset);
+        printf("%d\n", __LINE__);
         return 1;
     }
 
     if ((relative_frame_number < frame_count) && (start_offset > next_offset)) {
         trace_usb_ohci_iso_td_bad_cc_overrun(start_offset, next_offset);
+        printf("%d\n", __LINE__);
         return 1;
     }
 
@@ -691,7 +706,7 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
 
     if (start_addr > end_addr) {
         trace_usb_ohci_iso_td_bad_cc_overrun(start_addr, end_addr);
-        return 1;
+        //return 1;
     }
 
     if ((start_addr & OHCI_PAGE_MASK) != (end_addr & OHCI_PAGE_MASK)) {
@@ -708,6 +723,7 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed)
         if (ohci_copy_iso_td(ohci, start_addr, end_addr, buf, len,
                              DMA_DIRECTION_TO_DEVICE)) {
             ohci_die(ohci);
+            printf("%d\n", __LINE__);
             return 1;
         }
     }
@@ -1185,6 +1201,7 @@ static void ohci_frame_boundary(void *opaque)
     if (ohci_read_hcca(ohci, ohci->hcca, &hcca)) {
         trace_usb_ohci_hcca_read_error(ohci->hcca);
         ohci_die(ohci);
+        assert(0);
         return;
     }
 
@@ -1194,6 +1211,8 @@ static void ohci_frame_boundary(void *opaque)
 
         n = ohci->frame_number & 0x1f;
         ohci_service_ed_list(ohci, le32_to_cpu(hcca.intr[n]));
+    } else {
+        assert(0);
     }
 
     /* Cancel all pending packets if either of the lists has been disabled.  */
