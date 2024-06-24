@@ -993,6 +993,13 @@ static void cmd_read(IDEState *s, uint8_t* buf)
     }
 
     lba = ldl_be_p(buf + 2);
+
+#ifdef XBOX
+    #define XGD1_LSEEK_OFFSET 0x18300000UL
+    lba += XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE;
+    total_sectors -= (XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE);
+#endif
+
     if (lba >= total_sectors || lba + nb_sectors - 1 >= total_sectors) {
         ide_atapi_cmd_error(s, ILLEGAL_REQUEST, ASC_LOGICAL_BLOCK_OOR);
         return;
@@ -1007,6 +1014,7 @@ static void cmd_read_cd(IDEState *s, uint8_t* buf)
 
     /* Total logical sectors of ATAPI_SECTOR_SIZE(=2048) bytes */
     uint64_t total_sectors = s->nb_sectors >> 2;
+    total_sectors -= (XGD1_LSEEK_OFFSET / ATAPI_SECTOR_SIZE);
 
     nb_sectors = (buf[6] << 16) | (buf[7] << 8) | buf[8];
     if (nb_sectors == 0) {
