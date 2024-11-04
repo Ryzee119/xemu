@@ -525,6 +525,8 @@ void nv2a_reg_log_read(int block, hwaddr addr, unsigned int size, uint64_t val)
         block_name = blocktable[block].name;
     }
     trace_nv2a_reg_read(block_name, addr, size, val);
+    return;
+    printf("nv2a_reg_log_read: %s, addr=%" HWADDR_PRIx ", size=%d, val=%" PRIx64 "\n", block_name, addr, size, val);
 }
 
 static inline
@@ -535,6 +537,34 @@ void nv2a_reg_log_write(int block, hwaddr addr, unsigned int size, uint64_t val)
         block_name = blocktable[block].name;
     }
     trace_nv2a_reg_write(block_name, addr, size, val);
+    return;
+    if (block == 18) return;
+    // PRAMDAC
+    #if (0)
+    if (block == 17) {
+        printf("nv2a_reg_log_write: %s, addr=%" HWADDR_PRIx ", size=%d, val=%" PRIx64 "\n", block_name, addr, size, val);
+        switch (addr) {
+            case(0x800) : printf("FP_VDISPLAY_END: %d\n", val); break;
+            case(0x804) : printf("FP_VTOTAL: %d\n", val); break;
+            case(0x808) : printf("FP_VCRTC: %d\n", val); break;
+            case(0x80c) : printf("FP_VSYNC_START: %d\n", val); break;
+            case(0x810) : printf("FP_VSYNC_END: %d\n", val); break;
+            case(0x814) : printf("FP_VVALID_START: %d\n", val); break;
+            case(0x818) : printf("FP_VVALID_END: %d\n", val); break;
+            case(0x820) : printf("FP_HDISPLAY_END: %d\n", val); break;
+            case(0x824) : printf("FP_HTOTAL: %d\n", val); break;
+            case(0x828) : printf("FP_HCRTC: %d\n", val); break;
+            case(0x82c) : printf("FP_HSYNC_START: %d\n", val); break;
+            case(0x830) : printf("FP_HSYNC_END: %d\n", val); break;
+            case(0x834) : printf("FP_HVALID_START: %d\n", val); break;
+            case(0x838) : printf("FP_HVALID_END: %d\n", val); break;
+            case(0x84c) : printf("FP_MARGIN_COLOR: %d\n", val); break;
+            default: break;
+        }
+    } else {
+        printf("nv2a_reg_log_write: %s, addr=%" HWADDR_PRIx ", size=%d, val=%" PRIx64 "\n", block_name, addr, size, val);
+    }
+    #endif
 }
 
 #define DEFINE_PROTO(n) \

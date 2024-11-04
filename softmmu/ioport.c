@@ -40,18 +40,39 @@ typedef struct MemoryRegionPortioList {
 
 static uint64_t unassigned_io_read(void *opaque, hwaddr addr, unsigned size)
 {
+    if (size == 1)
+        printf("IO readb: %08x\n", (uint32_t)addr);
+    else if (size == 2)
+        printf("IO readw: %08x\n", (uint32_t)addr);
+    else if (size == 4)
+        printf("IO readdw: %08x\n", (uint32_t)addr);
+    else
+        printf("IO readddw: %08x\n", addr);
     return -1ULL;
 }
 
 static void unassigned_io_write(void *opaque, hwaddr addr, uint64_t val,
                                 unsigned size)
 {
+    if (size == 1)
+        printf("IO writeb: %08x = %02x\n", (uint32_t)addr , (uint8_t)val);
+    else if (size == 2)
+        printf("IO writew: %08x = %04x\n", (uint32_t)addr , (uint16_t)val);
+    else if (size == 4)
+        printf("IO writedw: %08x = %08x\n", (uint32_t)addr , (uint32_t)val);
+    else
+        printf("IO writeddw: %08x = %016x\n", addr , val);
+
 }
 
 const MemoryRegionOps unassigned_io_ops = {
     .read = unassigned_io_read,
     .write = unassigned_io_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
+    .impl = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
 };
 
 void cpu_outb(uint32_t addr, uint8_t val)

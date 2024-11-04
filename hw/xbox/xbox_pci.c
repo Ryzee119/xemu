@@ -316,13 +316,59 @@ static const TypeInfo xbox_smbus_info = {
     },
 };
 
+static void xblx_lpc_ioport_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    if (size ==  1) {
+        printf("LPC IO write: %04x %02x\n", (uint16_t)addr & 0xFFFF, (uint32_t)val);
+    }
+    else if (size == 2) {
+        printf("LPC IO write: %04x %04x\n", (uint16_t)addr & 0xFFFF, (uint16_t)val);
+    }
+    else if (size == 4) {
+        printf("LPC IO write: %04x %08x\n", (uint16_t)addr & 0xFFFF, (uint8_t)val);
+    }
+    else {
+        printf("LPC IO write too long\n");
+    }
+}
+
+static uint64_t xblx_lpc_ioport_read(void *opaque, hwaddr addr, unsigned size)
+{
+    if (size ==  1) {
+        printf("LPC IO Read: %04x\n", (uint16_t)addr & 0xFFFF);
+    }
+    else if (size == 2) {
+        printf("LPC IO Read: %04x\n", (uint16_t)addr & 0xFFFF);
+    }
+    else if (size == 4) {
+        printf("LPC IO Read: %04x\n", (uint16_t)addr & 0xFFFF);
+    }
+    else {
+        printf("LPC IO Read too long\n");
+    }
+    return 0;
+}
+
+static const MemoryRegionOps xbox_lpcio_ops = {
+    .read = xblx_lpc_ioport_read,
+    .write = xblx_lpc_ioport_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
+};
+
 static void xbox_lpc_realize(PCIDevice *dev, Error **errp)
 {
     XBOX_LPCState *d = XBOX_LPC_DEVICE(dev);
     ISABus *isa_bus;
 
-    isa_bus = isa_bus_new(DEVICE(d), get_system_memory(),
-                          pci_address_space_io(dev), errp);
+    //memory_region_init_io(&d->lpc_bar, OBJECT(dev), &xbox_lpcio_ops, d, "xbox-lpc-bar", 256);
+    //pci_register_bar(dev, 0, PCI_BASE_ADDRESS_SPACE_IO, &d->lpc_bar);
+
+
+    isa_bus = isa_bus_new(DEVICE(d), get_system_memory(), pci_address_space_io(dev), errp);
     if (isa_bus == NULL) {
         return;
     }

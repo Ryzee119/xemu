@@ -33,7 +33,7 @@
 #define TYPE_SMBUS_CX25871 "smbus-cx25871"
 #define SMBUS_CX25871(obj) OBJECT_CHECK(SMBusCX25871Device, (obj), TYPE_SMBUS_CX25871)
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 # define DPRINTF(format, ...) printf(format, ## __VA_ARGS__)
 #else

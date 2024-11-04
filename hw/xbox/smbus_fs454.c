@@ -33,7 +33,7 @@
 #define TYPE_SMBUS_fs454 "smbus-fs454"
 #define SMBUS_fs454(obj) OBJECT_CHECK(SMBusfs454Device, (obj), TYPE_SMBUS_fs454)
 
-// #define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 # define DPRINTF(format, ...) printf(format, ## __VA_ARGS__)
 #else
@@ -62,8 +62,12 @@ static int smbus_fs454_write_data(SMBusDevice *dev, uint8_t *buf, uint8_t len)
 
     if (len < 1) return 0;
 
-    DPRINTF("smbus_fs454_write_data: addr=0x%02x cmd=0x%02x val=0x%02x\n",
+    DPRINTF("smbus_fs454_write_data: addr=0x%02x cmd=0x%02x val=0x%02x",
             dev->i2c.address, cmd, buf[0]);
+    for (int i = 1; i < len; i++) {
+        DPRINTF(" 0x%02x", buf[i]);
+    }
+    DPRINTF(" len=%d\n", len);
 
     memcpy(cx->registers + cmd, buf, MIN(len, 256 - cmd));
 

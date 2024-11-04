@@ -34,7 +34,7 @@
 #include "trace.h"
 
 
-/* #define DEBUG_DMA */
+#define DEBUG_DMA
 
 #define dolog(...) fprintf (stderr, "dma: " __VA_ARGS__)
 #ifdef DEBUG_DMA

@@ -33,7 +33,7 @@
 #define TYPE_SMBUS_xcalibur "smbus-xcalibur"
 #define SMBUS_xcalibur(obj) OBJECT_CHECK(SMBusxcaliburDevice, (obj), TYPE_SMBUS_xcalibur)
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 # define DPRINTF(format, ...) printf(format, ## __VA_ARGS__)
 #else
@@ -51,6 +51,7 @@ static void smbus_xcalibur_quick_cmd(SMBusDevice *dev, uint8_t read)
     DPRINTF("smbus_xcalibur_quick_cmd: addr=0x%02x read=%d\n", dev->i2c.address, read);
 }
 
+static uint8_t index = 0;
 static int smbus_xcalibur_write_data(SMBusDevice *dev, uint8_t *buf, uint8_t len)
 {
     SMBusxcaliburDevice *cx = SMBUS_xcalibur(dev);
@@ -62,20 +63,26 @@ static int smbus_xcalibur_write_data(SMBusDevice *dev, uint8_t *buf, uint8_t len
 
     if (len < 1) return 0;
 
-    DPRINTF("smbus_xcalibur_write_data: addr=0x%02x cmd=0x%02x val=0x%02x\n",
-            dev->i2c.address, cmd, buf[0]);
+    DPRINTF("smbus_xcalibur_write_data: addr=0x%02x cmd=0x%02x val=0x",
+            dev->i2c.address, cmd);
+    for (int i = len - 1; i >= 1; i--) {
+        DPRINTF("%02x", buf[i]);
+    }
+    DPRINTF("\n");
 
     memcpy(cx->registers + cmd, buf, MIN(len, 256 - cmd));
-
+    index = 0;
     return 0;
 }
 
 static uint8_t smbus_xcalibur_receive_byte(SMBusDevice *dev)
 {
     SMBusxcaliburDevice *cx = SMBUS_xcalibur(dev);
+    uint8_t val = (index == 0) ? 4 : 0x00;
+    index++;
     DPRINTF("smbus_xcalibur_receive_byte: addr=0x%02x cmd=0x%02x\n",
-            dev->i2c.address, cx->cmd);
-    return cx->registers[cx->cmd++];
+            dev->i2c.address, val);
+    return val;//cx->registers[cx->cmd++];
 }
 
 static void smbus_xcalibur_realize(DeviceState *dev, Error **errp)

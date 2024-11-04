@@ -1508,6 +1508,165 @@ static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
     }
 }
 
+/* PCI Bus Address and MMIO - We match stock xbox */
+#define PCI_XBOX_SYSTEM_BUS 0
+#define PCI_XBOX_GPU_BUS    1
+
+// Bus 0, device 0, function 0.
+#define PCI_HOSTBRIDGE_DEVICE_ID   0
+#define PCI_HOSTBRIDGE_FUNCTION_ID 0
+
+// Bus 0, device 1, function 0.
+#define PCI_LPCBRIDGE_DEVICE_ID          1
+#define PCI_LPCBRIDGE_FUNCTION_ID        0
+#define PCI_LPCBRIDGE_IO_REGISTER_BASE_0 0x8000
+
+// Bus 0, device 1, function 1.
+#define PCI_SMBUS_DEVICE_ID          1
+#define PCI_SMBUS_FUNCTION_ID        1
+#define PCI_SMBUS_IO_REGISTER_BASE_1 0xC000
+#define PCI_SMBUS_IO_REGISTER_BASE_2 0xC200
+
+// Bus 0, device 2, function 0.
+#define PCI_USB0_DEVICE_ID              2
+#define PCI_USB0_FUNCTION_ID            0
+#define PCI_USB0_IRQ                    1
+#define PCI_USB0_MEMORY_REGISTER_BASE_0 0xFED00000
+
+// Bus 0, device 3, function 0.
+#define PCI_USB1_DEVICE_ID              3
+#define PCI_USB1_FUNCTION_ID            0
+#define PCI_USB1_IRQ                    9
+#define PCI_USB1_MEMORY_REGISTER_BASE_0 0xFED08000
+
+// Bus 0, device 4, function 0.
+#define PCI_NIC_DEVICE_ID              4
+#define PCI_NIC_FUNCTION_ID            0
+#define PCI_NIC_IRQ                    4
+#define PCI_NIC_MEMORY_REGISTER_BASE_0 0xFEF00000
+#define PCI_NIC_IO_REGISTER_BASE_1     0xE000
+
+// Bus 0, device 5, function 0.
+#define PCI_APU_DEVICE_ID              5
+#define PCI_APU_FUNCTION_ID            0
+#define PCI_APU_IRQ                    5
+#define PCI_APU_MEMORY_REGISTER_BASE_0 0xFE800000
+
+// Bus 0, device 6, function 0.
+#define PCI_ACI_DEVICE_ID              6
+#define PCI_ACI_FUNCTION_ID            0
+#define PCI_ACI_IRQ                    6
+#define PCI_ACI_IO_REGISTER_BASE_0     0xD000
+#define PCI_ACI_IO_REGISTER_BASE_1     0xD200
+// On retail, this is 0xFEC00000, but we use 0xFEC10000 to prevent overlaying
+// with the IOAPIC as we use it for FreeRTOS
+#define PCI_ACI_MEMORY_REGISTER_BASE_2 0xFEC20000 //0xFEC00000
+
+// Bus 0, device 9, function 0.
+#define PCI_IDE_DEVICE_ID          9
+#define PCI_IDE_FUNCTION_ID        0
+#define PCI_IDE_IRQ                14
+#define PCI_IDE_IO_REGISTER_BASE_4 0xFF60
+
+// Bus 0, device 30, function 0.
+#define PCI_AGPBRIDGE_DEVICE_ID   30
+#define PCI_AGPBRIDGE_FUNCTION_ID 0
+
+// Bus 1, device 0, device 0.
+#define PCI_GPU_DEVICE_ID              0
+#define PCI_GPU_FUNCTION_ID            0
+#define PCI_GPU_IRQ                    3
+#define PCI_GPU_MEMORY_REGISTER_BASE_0 0xFD000000
+
+static void slot_to_string(uint8_t bus_n, uint32_t devfn, const char **slot_name, const char **function_name){
+    uint8_t device = PCI_SLOT(devfn);
+    uint8_t function = PCI_FUNC(devfn);
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_HOSTBRIDGE_DEVICE_ID && function == PCI_HOSTBRIDGE_FUNCTION_ID) {
+        *function_name = "PCI_HOSTBRIDGE_FUNCTION_ID";
+        *slot_name = "PCI_HOSTBRIDGE_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_LPCBRIDGE_DEVICE_ID && function == PCI_LPCBRIDGE_FUNCTION_ID) {
+        *function_name = "PCI_LPCBRIDGE_FUNCTION_ID";
+        *slot_name = "PCI_LPCBRIDGE_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_SMBUS_DEVICE_ID && function == PCI_SMBUS_FUNCTION_ID) {
+        *function_name = "PCI_SMBUS_FUNCTION_ID";
+        *slot_name = "PCI_SMBUS_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_SMBUS_DEVICE_ID && function == PCI_SMBUS_FUNCTION_ID) {
+        *function_name = "PCI_SMBUS_FUNCTION_ID";
+        *slot_name = "PCI_SMBUS_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_USB0_DEVICE_ID && function == PCI_USB0_FUNCTION_ID) {
+        *function_name = "PCI_USB0_FUNCTION_ID";
+        *slot_name = "PCI_USB0_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_USB1_DEVICE_ID && function == PCI_USB1_FUNCTION_ID) {
+        *function_name = "PCI_USB1_FUNCTION_ID";
+        *slot_name = "PCI_USB1_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_NIC_DEVICE_ID && function == PCI_NIC_FUNCTION_ID) {
+        *function_name = "PCI_NIC_FUNCTION_ID";
+        *slot_name = "PCI_NIC_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_APU_DEVICE_ID && function == PCI_APU_FUNCTION_ID) {
+        *function_name = "PCI_APU_FUNCTION_ID";
+        *slot_name = "PCI_APU_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_ACI_DEVICE_ID && function == PCI_ACI_FUNCTION_ID) {
+        *function_name = "PCI_ACI_FUNCTION_ID";
+        *slot_name = "PCI_ACI_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_IDE_DEVICE_ID && function == PCI_IDE_FUNCTION_ID) {
+        *function_name = "PCI_IDE_FUNCTION_ID";
+        *slot_name = "PCI_IDE_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_SYSTEM_BUS && device == PCI_AGPBRIDGE_DEVICE_ID && function == PCI_AGPBRIDGE_FUNCTION_ID) {
+        *function_name = "PCI_AGPBRIDGE_FUNCTION_ID";
+        *slot_name = "PCI_AGPBRIDGE_DEVICE_ID";
+        return;
+    }
+
+    if (bus_n == PCI_XBOX_GPU_BUS && device == PCI_GPU_DEVICE_ID && function == PCI_GPU_FUNCTION_ID) {
+        *function_name = "PCI_GPU_FUNCTION_ID";
+        *slot_name = "PCI_GPU_DEVICE_ID";
+        return;
+    }
+
+    static char function_name_buffer[32];
+    static char slot_name_buffer[32];
+    snprintf(function_name_buffer, sizeof(function_name_buffer), "UNKNOWN_FUNCTION_%02x", function);
+    snprintf(slot_name_buffer, sizeof(slot_name_buffer), "UNKNOWN_DEVICE_%02x", device);
+
+
+    *function_name = function_name_buffer;
+    *slot_name = slot_name_buffer;
+
+}
+
+
+
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len)
 {
@@ -1520,6 +1679,21 @@ uint32_t pci_default_read_config(PCIDevice *d,
         pcie_sync_bridge_lnk(d);
     }
     memcpy(&val, d->config + address, len);
+
+#if (1)
+    const char *function_name = NULL;
+    const char *slot_name = NULL;
+    uint8_t bus = pci_dev_bus_num(d);
+    uint32_t devid = object_property_get_int(OBJECT(d), "addr", &error_abort);
+    slot_to_string(bus, devid, &slot_name, &function_name);
+    if (len == 4) {
+        printf("pci_io_input_dword(%s, %s, %s, 0x%08x); //%08x\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    } else if (len == 2){
+        printf("pci_io_input_word(%s, %s, %s, 0x%08x); //%08x\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    } else {
+        printf("pci_io_input_byte(%s, %s, %s, 0x%08x); //%08x\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    }
+#endif
     return le32_to_cpu(val);
 }
 
@@ -1527,6 +1701,24 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int 
 {
     int i, was_irq_disabled = pci_irq_disabled(d);
     uint32_t val = val_in;
+
+#if (1)
+    const char *function_name = NULL;
+    const char *slot_name = NULL;
+    uint8_t bus = pci_dev_bus_num(d);
+    uint32_t devid = object_property_get_int(OBJECT(d), "addr", &error_abort);
+    slot_to_string(bus, devid, &slot_name, &function_name);
+
+    uint32_t address = addr;
+    int len = l;
+    if (len == 4) {
+        printf("pci_io_output_dword(%s, %s, %s, 0x%08x, 0x%08x);\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    } else if (len == 2){
+        printf("pci_io_output_word(%s, %s, %s, 0x%08x, 0x%04x);\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    } else {
+        printf("pci_io_output_byte(%s, %s, %s, 0x%08x, 0x%02x);\n", (bus == 0) ? "PCI_XBOX_SYSTEM_BUS" : "PCI_XBOX_GPU_BUS", slot_name, function_name, address, val);
+    }
+#endif
 
     assert(addr + l <= pci_config_size(d));
 

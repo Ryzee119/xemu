@@ -58,7 +58,7 @@
     case (v)+(step)*2:                                               \
     case (v)+(step)*3
 
-// #define DEBUG_MCPX
+//#define DEBUG_MCPX
 
 #ifdef DEBUG_MCPX
 #define DPRINTF(fmt, ...) \
@@ -377,6 +377,7 @@ static uint64_t mcpx_apu_read(void *opaque, hwaddr addr, unsigned int size)
 {
     MCPXAPUState *d = opaque;
 
+    printf("mcpx_apu_read: addr=%08x size=%d\n", (uint32_t)addr, size);
     uint64_t r = 0;
     switch (addr) {
     case NV_PAPU_XGSCNT:
@@ -397,6 +398,8 @@ static void mcpx_apu_write(void *opaque, hwaddr addr, uint64_t val,
                            unsigned int size)
 {
     MCPXAPUState *d = opaque;
+
+    printf("mcpx_apu_write: addr=%08x val=%08x size=%d\n", (uint32_t)addr, (uint32_t)val, size);
 
     trace_mcpx_apu_reg_write(addr, size, val);
 
@@ -1320,7 +1323,7 @@ static hwaddr get_data_ptr(hwaddr sge_base, unsigned int max_sge, uint32_t addr)
         ldl_le_phys(&address_space_memory, sge_base + entry * 4 * 2);
     // uint32_t prd_control =
     //     ldl_le_phys(&address_space_memory, sge_base + entry * 4 * 2 + 4);
-    DPRINTF("Addr: 0x%08X, control: 0x%08X\n", prd_address, prd_control);
+    //DPRINTF("Addr: 0x%08X, control: 0x%08X\n", prd_address, prd_control);
     return prd_address + addr % TARGET_PAGE_SIZE;
 }
 

@@ -41,7 +41,7 @@
 #define TYPE_XBOX_SMC "smbus-xbox-smc"
 #define XBOX_SMC(obj) OBJECT_CHECK(SMBusSMCDevice, (obj), TYPE_XBOX_SMC)
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 # define DPRINTF(format, ...) printf(format, ## __VA_ARGS__)
 #else

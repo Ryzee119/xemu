@@ -32,7 +32,7 @@
 #include "migration/vmstate.h"
 #include "ui/xemu-widescreen.h"
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 # define XBOX_DPRINTF(format, ...)     printf(format, ## __VA_ARGS__)
 #else
@@ -110,6 +110,7 @@ static void xbox_pm_update_sci_fn(ACPIREGS *regs)
 static uint64_t xbox_pm_gpe_readb(void *opaque, hwaddr addr, unsigned width)
 {
     XBOX_PMRegs *pm = opaque;
+    printf("GPE readb: %08x\n", (uint32_t)addr);
     return acpi_gpe_ioport_readb(&pm->acpi_regs, addr);
 }
 
@@ -117,6 +118,7 @@ static void xbox_pm_gpe_writeb(void *opaque, hwaddr addr, uint64_t val,
                             unsigned width)
 {
     XBOX_PMRegs *pm = opaque;
+    printf("GPE writeb: %08x = %02x\n", (uint32_t)addr, (uint8_t)val);
     acpi_gpe_ioport_writeb(&pm->acpi_regs, addr, val);
     acpi_update_sci(&pm->acpi_regs, pm->irq);
 }

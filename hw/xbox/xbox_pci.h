@@ -54,6 +54,7 @@ typedef struct XBOX_LPCState {
     qemu_irq *pic;
 
     MemoryRegion *rom_memory;
+    MemoryRegion lpc_bar;
     int bootrom_size;
     uint8_t bootrom_data[512];
 } XBOX_LPCState;

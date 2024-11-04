@@ -33,7 +33,7 @@
 #define TYPE_SMBUS_ADM1032 "smbus-adm1032"
 #define SMBUS_ADM1032(obj) OBJECT_CHECK(SMBusADM1032Device, (obj), TYPE_SMBUS_ADM1032)
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 # define DPRINTF(format, ...) printf(format, ## __VA_ARGS__)
 #else

@@ -57,11 +57,11 @@ uint64_t user_read(void *opaque, hwaddr addr, unsigned int size)
             }
         } else {
             /* ramfc */
-            assert(false);
+            //assert(false);
         }
     } else {
         /* PIO Mode */
-        assert(false);
+        //assert(false);
     }
 
     qemu_mutex_unlock(&d->pfifo.lock);
