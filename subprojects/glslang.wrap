@@ -1,6 +1,6 @@
 [wrap-git]
 url = https://github.com/KhronosGroup/glslang
-revision = a57276bf558f5cf94d3a9854ebdf5a2236849a5a
+revision = a8d28bd082bff18ffbe80996e922b012f915cf07
 depth = 1
 
 [update]
